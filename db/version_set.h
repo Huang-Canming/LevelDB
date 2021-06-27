@@ -145,24 +145,24 @@ class Version {
   void ForEachOverlapping(Slice user_key, Slice internal_key, void* arg,
                           bool (*func)(void*, int, FileMetaData*));
 
-  VersionSet* vset_;  // VersionSet to which this Version belongs
+  VersionSet* vset_;  // 指向包含这个version的versionset，VersionSet to which this Version belongs
   Version* next_;     // Next version in linked list
   Version* prev_;     // Previous version in linked list
-  int refs_;          // Number of live refs to this version
+  int refs_;          // 引用计数，Number of live refs to this version
 
-  // List of files per level
+  // 二维数组，每一行表示一个level，一行中包含了对应level的所有文件的元信息，List of files per level
   std::vector<FileMetaData*> files_[config::kNumLevels];
 
   // Next file to compact based on seek stats. 用于seek compation.
-  FileMetaData* file_to_compact_;
-  int file_to_compact_level_;
+  FileMetaData* file_to_compact_;   // 需要compact的文件
+  int file_to_compact_level_;       // 需要compact的文件所属的level
 
   // Level that should be compacted next and its compaction score.
   // Score < 1 means compaction is not strictly needed.  These fields
   // are initialized by Finalize().
   // 用于size_compation
-  double compaction_score_;
-  int compaction_level_;
+  double compaction_score_;         // 衡量一个level是否应该compact的值
+  int compaction_level_;            // 应该被compact的level
 };
 
 class VersionSet {
@@ -179,6 +179,7 @@ class VersionSet {
   // current version.  Will release *mu while actually writing to the file.
   // REQUIRES: *mu is held on entry.
   // REQUIRES: no other thread concurrently calls LogAndApply()
+  // 将VersionEdit应用到某个Version，来生成一个新的Version
   Status LogAndApply(VersionEdit* edit, port::Mutex* mu)
       EXCLUSIVE_LOCKS_REQUIRED(mu);
 
@@ -295,21 +296,21 @@ class VersionSet {
   void AppendVersion(Version* v);
 
   Env* const env_;
-  const std::string dbname_;
+  const std::string dbname_;        // 存储LevelDB的数据路径
   const Options* const options_;
   TableCache* const table_cache_;
   const InternalKeyComparator icmp_;
-  uint64_t next_file_number_;
-  uint64_t manifest_file_number_;
-  uint64_t last_sequence_;
-  uint64_t log_number_;
-  uint64_t prev_log_number_;  // 0 or backing store for memtable being compacted
+  uint64_t next_file_number_;       // 下一个 manifest 文件编号，写入到 manifest 日志里
+  uint64_t manifest_file_number_;   // manifest 文件编号，每次重启后递增
+  uint64_t last_sequence_;          // sequence 号，用于 snapshot，每次写入操作都会递增
+  uint64_t log_number_;             // wal 日志文件编号
+  uint64_t prev_log_number_;        // 0 or backing store for memtable being compacted
 
-  // Opened lazily
-  WritableFile* descriptor_file_;
-  log::Writer* descriptor_log_;
-  Version dummy_versions_;  // 管理Version的双向链表的头指针。Head of circular doubly-linked list of versions.
-  Version* current_;        // 当前最新版本。== dummy_versions_.prev_
+  // Opened lazily 
+  WritableFile* descriptor_file_;   // 指向manifest文件
+  log::Writer* descriptor_log_;     // 用于向manifest文件中写入日志记录
+  Version dummy_versions_;          // 管理Version的双向链表的头指针。
+  Version* current_;                // 当前最新版本。== dummy_versions_.prev_
 
   // 记录每个层级下次compation启动的key。
   // Per-level key at which the next compaction at that level should start.

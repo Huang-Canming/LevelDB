@@ -75,8 +75,8 @@ class VersionEdit {
     deleted_files_.insert(std::make_pair(level, file));
   }
 
-  void EncodeTo(std::string* dst) const;
-  Status DecodeFrom(const Slice& src);
+  void EncodeTo(std::string* dst) const;    // 将VersionEdit编码为字符串
+  Status DecodeFrom(const Slice& src);  // 从字符串解码出VersionEdit类的对象
 
   std::string DebugString() const;
 
@@ -85,20 +85,20 @@ class VersionEdit {
 
   typedef std::set<std::pair<int, uint64_t>> DeletedFileSet;
 
-  std::string comparator_;
-  uint64_t log_number_;
+  std::string comparator_;          // 存储比较key值的comparator的名字
+  uint64_t log_number_;             // WAL 日志文件的编号，不是 MANIFEST 日志文件的编号
   uint64_t prev_log_number_;
   uint64_t next_file_number_;
-  SequenceNumber last_sequence_;
+  SequenceNumber last_sequence_;    //  下一个 MANIFEST 文件的编号；
   bool has_comparator_;
   bool has_log_number_;
   bool has_prev_log_number_;
   bool has_next_file_number_;
   bool has_last_sequence_;
 
-  std::vector<std::pair<int, InternalKey>> compact_pointers_;  // <level, 对应level的下次compation启动的key>
-  DeletedFileSet deleted_files_;
-  std::vector<std::pair<int, FileMetaData>> new_files_;  // <level，文件描述信息>
+  std::vector<std::pair<int, InternalKey>> compact_pointers_;   // <level, 对应level的下次compation启动的key>
+  DeletedFileSet deleted_files_;                                // 存储需要被删除的文件
+  std::vector<std::pair<int, FileMetaData>> new_files_;         // <level，文件描述信息>
 };
 
 }  // namespace leveldb

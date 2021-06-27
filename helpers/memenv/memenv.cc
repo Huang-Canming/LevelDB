@@ -381,7 +381,7 @@ class InMemoryEnv : public EnvWrapper {
   typedef std::map<std::string, FileState*> FileSystem;
 
   port::Mutex mutex_;
-  FileSystem file_map_ GUARDED_BY(mutex_);
+  FileSystem file_map_ ;//GUARDED_BY(mutex_);
 };
 
 }  // namespace

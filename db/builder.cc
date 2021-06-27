@@ -23,18 +23,17 @@ Status BuildTable(const std::string& dbname, Env* env, const Options& options,
   std::string fname = TableFileName(dbname, meta->number);
   if (iter->Valid()) {
     WritableFile* file;
-    s = env->NewWritableFile(fname, &file);
+    s = env->NewWritableFile(fname, &file);     // 生成新的 sstable
     if (!s.ok()) {
       return s;
     }
 
-    // 将memtabe中的记录，逐条写入sstable。
     TableBuilder* builder = new TableBuilder(options, file);
     meta->smallest.DecodeFrom(iter->key());
-    for (; iter->Valid(); iter->Next()) {
+    for (; iter->Valid(); iter->Next()) {       // 遍历 memtable
       Slice key = iter->key();
       meta->largest.DecodeFrom(key);
-      builder->Add(key, iter->value());
+      builder->Add(key, iter->value());         // 写入 sstable
     }
 
     // Finish and check for builder errors
@@ -47,7 +46,7 @@ Status BuildTable(const std::string& dbname, Env* env, const Options& options,
 
     // Finish and check for file errors
     if (s.ok()) {
-      s = file->Sync();
+      s = file->Sync();                         // 写入 sstable 完成后 sync
     }
     if (s.ok()) {
       s = file->Close();
@@ -57,8 +56,8 @@ Status BuildTable(const std::string& dbname, Env* env, const Options& options,
 
     if (s.ok()) {
       // Verify that the table is usable
-      Iterator* it = table_cache->NewIterator(ReadOptions(), meta->number,
-                                              meta->file_size);
+      // 将新生成 sstable 加入 TableCache，作为文件正常的验证
+      Iterator* it = table_cache->NewIterator(ReadOptions(), meta->number, meta->file_size);
       s = it->status();
       delete it;
     }

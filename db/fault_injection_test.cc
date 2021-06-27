@@ -158,9 +158,9 @@ class FaultInjectionTestEnv : public EnvWrapper {
 
  private:
   port::Mutex mutex_;
-  std::map<std::string, FileState> db_file_state_ GUARDED_BY(mutex_);
-  std::set<std::string> new_files_since_last_dir_sync_ GUARDED_BY(mutex_);
-  bool filesystem_active_ GUARDED_BY(mutex_);  // Record flushes, syncs, writes
+  std::map<std::string, FileState> db_file_state_ ;//GUARDED_BY(mutex_);
+  std::set<std::string> new_files_since_last_dir_sync_ ;//GUARDED_BY(mutex_);
+  bool filesystem_active_ ;//GUARDED_BY(mutex_);  // Record flushes, syncs, writes
 };
 
 TestWritableFile::TestWritableFile(const FileState& state, WritableFile* f,
