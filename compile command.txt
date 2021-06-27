@@ -1,0 +1,1 @@
+g++ -g useDB.cpp -l leveldb -l pthread
