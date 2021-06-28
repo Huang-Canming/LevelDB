@@ -66,8 +66,8 @@ typedef uint64_t SequenceNumber;
 // can be packed together into 64-bits.
 static const SequenceNumber kMaxSequenceNumber = ((0x1ull << 56) - 1);
 
-struct ParsedInternalKey {
-  Slice user_key;
+struct ParsedInternalKey {          // db 内部操作的 key，db 内部需要将 user key 加入元信息 (ValueType/SequenceNumber)
+  Slice user_key;                   // 用户层面传入的 key，使用 Slice 格式。
   SequenceNumber sequence;
   ValueType type;
 
@@ -133,7 +133,7 @@ class InternalFilterPolicy : public FilterPolicy {
 // Modules in this directory should keep internal keys wrapped inside
 // the following class instead of plain strings so that we do not
 // incorrectly use string comparisons instead of an InternalKeyComparator.
-class InternalKey {
+class InternalKey {                  // db 内部，包装易用的结构
  private:
   std::string rep_;
 
@@ -186,7 +186,7 @@ inline bool ParseInternalKey(const Slice& internal_key,
 }
 
 // A helper class useful for DBImpl::Get()
-class LookupKey {
+class LookupKey {            // db 内部在为查找 memtable/sstable 方便，包装使用的 key 结构
  public:
   // Initialize *this for looking up user_key at a snapshot with
   // the specified sequence number.
@@ -214,10 +214,10 @@ class LookupKey {
   //                                    <-- end_
   // The array is a suitable MemTable key.
   // The suffix starting with "userkey" can be used as an InternalKey.
-  const char* start_;
-  const char* kstart_;
+  const char* start_;       // 对 memtable 进行 lookup 时使用 [start,end]
+  const char* kstart_;      // 对 sstable lookup 时使用[kstart, end]
   const char* end_;
-  char space_[200];  // Avoid allocation for short keys
+  char space_[200];         // Avoid allocation for short keys
 };
 
 inline LookupKey::~LookupKey() {
