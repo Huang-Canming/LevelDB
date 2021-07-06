@@ -39,17 +39,17 @@ class Arena {
   char* AllocateNewBlock(size_t block_bytes);
 
   // Allocation state
-  char* alloc_ptr_;
-  size_t alloc_bytes_remaining_;
+  char* alloc_ptr_;                             // 当前空闲内存 block 内的可用地址
+  size_t alloc_bytes_remaining_;                // 当前空闲内存 block 内的可用大小
 
   // Array of new[] allocated memory blocks
-  std::vector<char*> blocks_;
+  std::vector<char*> blocks_;                   // 已经申请的内存 block
 
   // Total memory usage of the arena.
   //
   // TODO(costan): This member is accessed via atomics, but the others are
   //               accessed without any locking. Is this OK?
-  std::atomic<size_t> memory_usage_;
+  std::atomic<size_t> memory_usage_;            // 累计分配的内存大小，一个 memtable 对应一个 Arena，memtable 内的数据量就用这个值表示
 };
 
 inline char* Arena::Allocate(size_t bytes) {

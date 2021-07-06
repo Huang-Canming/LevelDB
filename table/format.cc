@@ -72,7 +72,7 @@ Status ReadBlock(RandomAccessFile* file, const ReadOptions& options,
   size_t n = static_cast<size_t>(handle.size());
   char* buf = new char[n + kBlockTrailerSize];
   Slice contents;
-  Status s = file->Read(handle.offset(), n + kBlockTrailerSize, &contents, buf);
+  Status s = file->Read(handle.offset(), n + kBlockTrailerSize, &contents, buf);    // 根据 BlockHandle，将 block 从 sstable 中读取出来（包含 trailer）
   if (!s.ok()) {
     delete[] buf;
     return s;
@@ -84,17 +84,17 @@ Status ReadBlock(RandomAccessFile* file, const ReadOptions& options,
 
   // Check the crc of the type and the block contents
   const char* data = contents.data();  // Pointer to where Read put the data
-  if (options.verify_checksums) {
+  if (options.verify_checksums) {                                                   // get 时由 ReadOption:: verify_checksums 控制
     const uint32_t crc = crc32c::Unmask(DecodeFixed32(data + n + 1));
     const uint32_t actual = crc32c::Value(data, n + 1);
-    if (actual != crc) {
+    if (actual != crc) {                                                            // 可选校验 trailer 中的 crc
       delete[] buf;
       s = Status::Corruption("block checksum mismatch");
       return s;
     }
   }
 
-  switch (data[n]) {
+  switch (data[n]) {                                                                // 根据 trailer 中的 type，决定是否要解压数据
     case kNoCompression:
       if (data != buf) {
         // File implementation gave us pointer to some other data.

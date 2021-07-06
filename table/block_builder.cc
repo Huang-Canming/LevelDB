@@ -80,20 +80,20 @@ void BlockBuilder::Add(const Slice& key, const Slice& value) {
   assert(buffer_.empty()  // No values yet?
          || options_->comparator->Compare(key, last_key_piece) > 0); //排好序的
   size_t shared = 0;
-  if (counter_ < options_->block_restart_interval) {
+  if (counter_ < options_->block_restart_interval) {    // 上一轮前缀压缩未完成（未达到 restart_interval）
     // See how much sharing to do with previous string
     const size_t min_length = std::min(last_key_piece.size(), key.size());
     while ((shared < min_length) && (last_key_piece[shared] == key[shared])) {
       shared++;
     }
-  } else {
+  } else {                                              // 上一轮前缀压缩已完成（达到 restart_interval）
     // Restart compression
-    restarts_.push_back(buffer_.size()); //记录restarts。buffer_.size()为当前数据块偏移
+    restarts_.push_back(buffer_.size());                //记录restarts，重新开始新一轮。buffer_.size()为当前数据块偏移
     counter_ = 0;
   }
   const size_t non_shared = key.size() - shared;
 
-  // Add "<shared><non_shared><value_size>" to buffer_
+  // Add "<shared><non_shared><value_size>" to buffer_  // 将 key/value 以 block 内 entry 的数据格式，追加到该 block 上(内存中)
   PutVarint32(&buffer_, shared);
   PutVarint32(&buffer_, non_shared);
   PutVarint32(&buffer_, value.size());

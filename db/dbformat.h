@@ -168,8 +168,7 @@ class InternalKey {                  // db 内部，包装易用的结构
   std::string DebugString() const;
 };
 
-inline int InternalKeyComparator::Compare(const InternalKey& a,
-                                          const InternalKey& b) const {
+inline int InternalKeyComparator::Compare(const InternalKey& a, const InternalKey& b) const {
   return Compare(a.Encode(), b.Encode());
 }
 
@@ -208,10 +207,10 @@ class LookupKey {            // db 内部在为查找 memtable/sstable 方便，
 
  private:
   // We construct a char array of the form:
-  //    klength  varint32               <-- start_
-  //    userkey  char[klength]          <-- kstart_
-  //    tag      uint64
-  //                                    <-- end_
+  //    userkey_len                 varint32               <-- start_
+  //    userkey_data                char[userkey_len]      <-- kstart_
+  //    SequnceNumber/ValueType     uint64
+  //                                                       <-- end_
   // The array is a suitable MemTable key.
   // The suffix starting with "userkey" can be used as an InternalKey.
   const char* start_;       // 对 memtable 进行 lookup 时使用 [start,end]

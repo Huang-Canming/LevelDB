@@ -65,7 +65,7 @@ class LEVELDB_EXPORT Slice {
     size_ = 0;
   }
 
-  // Drop the first "n" bytes from this slice.
+  // 对当前切片进行修改，删除前n个字符，Drop the first "n" bytes from this slice.
   void remove_prefix(size_t n) {
     assert(n <= size());
     data_ += n;
@@ -81,7 +81,7 @@ class LEVELDB_EXPORT Slice {
   //   >  0 iff "*this" >  "b"
   int compare(const Slice& b) const;
 
-  // Return true iff "x" is a prefix of "*this"
+  // 判断当前切片指针指向的存储区的前n个字节和另外一个切片存储区是否一致，Return true if "x" is a prefix of "*this"
   bool starts_with(const Slice& x) const {
     return ((size_ >= x.size_) && (memcmp(data_, x.data_, x.size_) == 0));
   }

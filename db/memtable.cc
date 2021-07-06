@@ -25,8 +25,7 @@ MemTable::~MemTable() { assert(refs_ == 0); }
 
 size_t MemTable::ApproximateMemoryUsage() { return arena_.MemoryUsage(); }
 
-int MemTable::KeyComparator::operator()(const char* aptr,
-                                        const char* bptr) const {
+int MemTable::KeyComparator::operator()(const char* aptr, const char* bptr) const {
   // Internal keys are encoded as length-prefixed strings.
   Slice a = GetLengthPrefixedSlice(aptr);
   Slice b = GetLengthPrefixedSlice(bptr);
@@ -73,29 +72,27 @@ class MemTableIterator : public Iterator {
 
 Iterator* MemTable::NewIterator() { return new MemTableIterator(&table_); }
 
-void MemTable::Add(SequenceNumber s, ValueType type, const Slice& key,
-                   const Slice& value) {
+void MemTable::Add(SequenceNumber s, ValueType type, const Slice& key, const Slice& value) {
   // Format of an entry is concatenation of:
   //  key_size     : varint32 of internal_key.size()
   //  key bytes    : char[internal_key.size()]
+  //  tag          : sequence + tag
   //  value_size   : varint32 of value.size()
   //  value bytes  : char[value.size()]
-  size_t key_size = key.size();
+  size_t key_size = key.size();                     // B: userkey
   size_t val_size = value.size();
-  size_t internal_key_size = key_size + 8;
-  const size_t encoded_len = VarintLength(internal_key_size) +
-                             internal_key_size + VarintLength(val_size) +
-                             val_size;
+  size_t internal_key_size = key_size + 8;          // A: 8 变长编码 + userkey.size
+  const size_t encoded_len = VarintLength(internal_key_size) + internal_key_size + VarintLength(val_size) + val_size;
   char* buf = arena_.Allocate(encoded_len);
-  char* p = EncodeVarint32(buf, internal_key_size); // A: userkey.size + 8 变长编码
-  memcpy(p, key.data(), key_size);                  // B: userkey         
+  char* p = EncodeVarint32(buf, internal_key_size); 
+  memcpy(p, key.data(), key_size);                           
   p += key_size;
   EncodeFixed64(p, (s << 8) | type);                // C: 64位整型顺序号<<8+值类型 64位定长编码后的值
   p += 8;
-  p = EncodeVarint32(p, val_size);                   // value_size 变长编码
-  memcpy(p, value.data(), val_size);                 // value
+  p = EncodeVarint32(p, val_size);                  // value_size 变长编码
+  memcpy(p, value.data(), val_size);                // value
   assert(p + val_size == buf + encoded_len);
-  table_.Insert(buf);
+  table_.Insert(buf);                               // 插入跳表
 
   // memtable_key = A + B + C
   // internal_key = B + C
@@ -103,9 +100,9 @@ void MemTable::Add(SequenceNumber s, ValueType type, const Slice& key,
 }
 
 bool MemTable::Get(const LookupKey& key, std::string* value, Status* s) {
-  Slice memkey = key.memtable_key();
+  Slice memkey = key.memtable_key();                        // 从传入的 LookupKey 中取得 memtable 中存储的 key 格式
   Table::Iterator iter(&table_);
-  iter.Seek(memkey.data());
+  iter.Seek(memkey.data());                                 // 做 MemTableIterator::Seek()
   if (iter.Valid()) {
     // entry format is:
     //    klength  varint32
@@ -122,19 +119,17 @@ bool MemTable::Get(const LookupKey& key, std::string* value, Status* s) {
     //key_ptr = user_key
     uint32_t key_length;
     const char* key_ptr = GetVarint32Ptr(entry, entry + 5, &key_length); 
-    //用用户提供的键比较器(默认BytewiseComparator)比较用户键，因为SkipList的Seek不是准确定位
-    if (comparator_.comparator.user_comparator()->Compare(
-            Slice(key_ptr, key_length - 8), key.user_key()) == 0) {
+    //用 user 提供的键比较器(默认BytewiseComparator)比较用户键，因为SkipList的Seek不是准确定位
+    if (comparator_.comparator.user_comparator()->Compare(Slice(key_ptr, key_length - 8), key.user_key()) == 0) {
       // Correct user key
       const uint64_t tag = DecodeFixed64(key_ptr + key_length - 8);
-      switch (static_cast<ValueType>(tag & 0xff)) {
+      switch (static_cast<ValueType>(tag & 0xff)) {         // seek 成功，则判断数据的 ValueType
         case kTypeValue: {
           Slice v = GetLengthPrefixedSlice(key_ptr + key_length);
-          value->assign(v.data(), v.size());
+          value->assign(v.data(), v.size());                // kTypeValue，返回对应的 value 数据
           return true;
         }
-        // 如果是删除的对象，那么返回的就是没有找到的状态
-        case kTypeDeletion:
+        case kTypeDeletion:                                 // kTypeDeletion，返回 data not exist
           *s = Status::NotFound(Slice());
           return true;
       }
