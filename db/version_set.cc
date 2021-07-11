@@ -200,12 +200,12 @@ class Version::LevelFileNumIterator : public Iterator {
   Status status() const override { return Status::OK(); }
 
  private:
-  const InternalKeyComparator icmp_;
-  const std::vector<FileMetaData*>* const flist_;
-  uint32_t index_;
+  const InternalKeyComparator icmp_;                // 对 key 做比较的 comparator
+  const std::vector<FileMetaData*>* const flist_;   // 当前 level 中 FileMetaData 集合，构造时取 Version::files_[]中的一项即可，其中的 FileMetaData 已经按照 sstable（FileMetaData）的 smallest 排序
+  uint32_t index_;                                  // 当前定位到的 sstable(FileMetaData)在 flist_中的 index
 
   // Backing store for value().  Holds the file number and size.
-  mutable char value_buf_[16];
+  mutable char value_buf_[16];                      // 保存上次取 Value（）时的实际数据，供 Slice 包装返回。这是为了避免每次 Value（）都要分配内存。
 };
 
 static Iterator* GetFileIterator(void* arg, const ReadOptions& options,

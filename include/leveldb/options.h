@@ -102,7 +102,7 @@ struct LEVELDB_EXPORT Options {
   // Number of keys between restart points for delta encoding of keys.
   // This parameter can be changed dynamically.  Most clients should
   // leave this parameter alone.
-  int block_restart_interval = 16;
+  int block_restart_interval = 16;  // 确定每隔几个key就直接存储一个重启点key
 
   // Leveldb will write up to this amount of bytes to a file before
   // switching to a new one.

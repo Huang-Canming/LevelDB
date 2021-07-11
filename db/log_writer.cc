@@ -31,7 +31,7 @@ Writer::Writer(WritableFile* dest, uint64_t dest_length)
 
 Writer::~Writer() = default;
 
-Status Writer::AddRecord(const Slice& slice) {
+Status Writer::AddRecord(const Slice& slice) {                      // 对 log 的每次写入作为 record 添加
   const char* ptr = slice.data();
   size_t left = slice.size();
 
@@ -43,12 +43,12 @@ Status Writer::AddRecord(const Slice& slice) {
   do {
     const int leftover = kBlockSize - block_offset_;
     assert(leftover >= 0);
-    if (leftover < kHeaderSize) {
+    if (leftover < kHeaderSize) {                                   // 如果当前 block 剩余的 size 小于 record 头长度
       // Switch to a new block
       if (leftover > 0) {
         // Fill the trailer (literal below relies on kHeaderSize being 7)
         static_assert(kHeaderSize == 7, "");
-        dest_->Append(Slice("\x00\x00\x00\x00\x00\x00", leftover));
+        dest_->Append(Slice("\x00\x00\x00\x00\x00\x00", leftover)); // 填充 trailer
       }
       block_offset_ = 0;
     }
@@ -57,35 +57,29 @@ Status Writer::AddRecord(const Slice& slice) {
     assert(kBlockSize - block_offset_ - kHeaderSize >= 0);
 
     const size_t avail = kBlockSize - block_offset_ - kHeaderSize;
-    const size_t fragment_length = (left < avail) ? left : avail;
+    const size_t fragment_length = (left < avail) ? left : avail;   // 根据block剩余size和写入size，划分出满足写入的最大record
 
-    // 如果新的slice小于avail，则该slice可用整个添加到当前Block中，
-    // 不需要分段，此时type=kFullType
-    // 如果slice大于等于avail，则该slice需要分段存储，如果是第一段
-    // type = kFirstType，如果是最后一段type = kLastType，否则type = kMiddleType
-    RecordType type;
+    RecordType type;                                    // 确定 record type
     const bool end = (left == fragment_length);
-    if (begin && end) {
-      type = kFullType;
-    } else if (begin) {
-      type = kFirstType;
-    } else if (end) {
-      type = kLastType;
+    if (begin && end) {                                 // 新的slice小于avail，该slice可整个添加到当前Block中，不需要分段                              
+      type = kFullType;                                 // type=kFullType
+    } else if (begin) {                                 // 如果slice大于等于avail，则该slice需要分段存储，如果是第一段
+      type = kFirstType;                                // type = kFirstType
+    } else if (end) {   
+      type = kLastType;                                 // 如果是最后一段，type = kLastType
     } else {
-      type = kMiddleType;
+      type = kMiddleType;                               // 否则，type = kMiddleType
     }
 
-    // 将数据组建成指定格式后存储到磁盘
-    s = EmitPhysicalRecord(type, ptr, fragment_length);
+    s = EmitPhysicalRecord(type, ptr, fragment_length); // 写入 record（将 record 存储到磁盘）
     ptr += fragment_length;
     left -= fragment_length;
     begin = false;
-  } while (s.ok() && left > 0);
+  } while (s.ok() && left > 0);              // 循环直至写入处理完成
   return s;
 }
 
-Status Writer::EmitPhysicalRecord(RecordType t, const char* ptr,
-                                  size_t length) {
+Status Writer::EmitPhysicalRecord(RecordType t, const char* ptr, size_t length) {
   assert(length <= 0xffff);  // Must fit in two bytes
   assert(block_offset_ + kHeaderSize + length <= kBlockSize);
 
@@ -101,11 +95,11 @@ Status Writer::EmitPhysicalRecord(RecordType t, const char* ptr,
   EncodeFixed32(buf, crc);
 
   // Write the header and the payload
-  Status s = dest_->Append(Slice(buf, kHeaderSize));
+  Status s = dest_->Append(Slice(buf, kHeaderSize));    // 构造 record 头（checksum/size/type）
   if (s.ok()) {
-    s = dest_->Append(Slice(ptr, length));
+    s = dest_->Append(Slice(ptr, length));              // 追加写入 log 文件
     if (s.ok()) {
-      s = dest_->Flush();
+      s = dest_->Flush();                               // 根据 option 指定的 sync 决定是否做 log 文件的强制 sync
     }
   }
   block_offset_ += kHeaderSize + length;

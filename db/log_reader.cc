@@ -55,9 +55,10 @@ bool Reader::SkipToInitialBlock() {
   return true;
 }
 
+// log 的读取仅发生在 db 启动的时候，每次读取出当时写入的一次完整更新
 bool Reader::ReadRecord(Slice* record, std::string* scratch) {
   if (last_record_offset_ < initial_offset_) {
-    if (!SkipToInitialBlock()) {
+    if (!SkipToInitialBlock()) {                    // 根据指定的 initial_offset_跳过 log 文件开始的 init_data
       return false;
     }
   }
@@ -71,7 +72,7 @@ bool Reader::ReadRecord(Slice* record, std::string* scratch) {
 
   Slice fragment;
   while (true) {
-    const unsigned int record_type = ReadPhysicalRecord(&fragment);
+    const unsigned int record_type = ReadPhysicalRecord(&fragment);     // 从 log 文件中读一个 record
 
     // ReadPhysicalRecord may have only had an empty trailer remaining in its
     // internal buffer. Calculate the offset of the next physical record now
@@ -90,8 +91,8 @@ bool Reader::ReadRecord(Slice* record, std::string* scratch) {
       }
     }
 
-    switch (record_type) {
-      case kFullType:
+    switch (record_type) {                          // 根据读到 record 的 type 做进一步处理
+      case kFullType:                               // kFullType，则直接返回
         if (in_fragmented_record) {
           // Handle bug in earlier versions of log::Writer where
           // it could emit an empty kFirstType record at the tail end
@@ -107,7 +108,7 @@ bool Reader::ReadRecord(Slice* record, std::string* scratch) {
         last_record_offset_ = prospective_record_offset;
         return true;
 
-      case kFirstType:
+      case kFirstType:                              // kFirstType/ kMiddleType，保存读到的数据
         if (in_fragmented_record) {
           // Handle bug in earlier versions of log::Writer where
           // it could emit an empty kFirstType record at the tail end
@@ -124,17 +125,15 @@ bool Reader::ReadRecord(Slice* record, std::string* scratch) {
 
       case kMiddleType:
         if (!in_fragmented_record) {
-          ReportCorruption(fragment.size(),
-                           "missing start of fragmented record(1)");
+          ReportCorruption(fragment.size(), "missing start of fragmented record(1)");
         } else {
           scratch->append(fragment.data(), fragment.size());
         }
         break;
 
-      case kLastType:
+      case kLastType:                               // kLastType，与前面已经读到的数据合并，直接返回
         if (!in_fragmented_record) {
-          ReportCorruption(fragment.size(),
-                           "missing start of fragmented record(2)");
+          ReportCorruption(fragment.size(), "missing start of fragmented record(2)");
         } else {
           scratch->append(fragment.data(), fragment.size());
           *record = Slice(*scratch);
@@ -143,7 +142,7 @@ bool Reader::ReadRecord(Slice* record, std::string* scratch) {
         }
         break;
 
-      case kEof:
+      case kEof:                                    // 非法的 type，返回错误
         if (in_fragmented_record) {
           // This can be caused by the writer dying immediately after
           // writing a physical record but before completing the next; don't
@@ -163,15 +162,13 @@ bool Reader::ReadRecord(Slice* record, std::string* scratch) {
       default: {
         char buf[40];
         snprintf(buf, sizeof(buf), "unknown record type %u", record_type);
-        ReportCorruption(
-            (fragment.size() + (in_fragmented_record ? scratch->size() : 0)),
-            buf);
+        ReportCorruption((fragment.size() + (in_fragmented_record ? scratch->size() : 0)), buf);
         in_fragmented_record = false;
         scratch->clear();
         break;
       }
     }
-  }
+  }                             // 循环直至读取出当时写入的一个完整更新
   return false;
 }
 
@@ -192,8 +189,7 @@ unsigned int Reader::ReadPhysicalRecord(Slice* result) {
   while (true) {
     // 两种情况下该条件成立
     // 1.出现在第一次read，因为buffer_在reader的构造函数里是初始化空
-    // 2.当前buffer_的内容为Block尾部的6个空字符，这时实际上当前Block
-    //   以及解析完了，准备解析下一个Block  
+    // 2.当前buffer_的内容为Block尾部的6个空字符，这时实际上当前Block已经解析完了，准备解析下一个Block  
     if (buffer_.size() < kHeaderSize) {
       if (!eof_) {
         // Last read was a full read, so this is a trailer to skip 清空buffer_，存储下一个Block

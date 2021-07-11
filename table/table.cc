@@ -35,8 +35,8 @@ struct Table::Rep {
   Block* index_block;
 };
 
-Status Table::Open(const Options& options, RandomAccessFile* file,
-                   uint64_t size, Table** table) {
+// 一个 sstable 需要 IO 时首先 open
+Status Table::Open(const Options& options, RandomAccessFile* file, uint64_t size, Table** table) {
   *table = nullptr;
   if (size < Footer::kEncodedLength) {
     return Status::Corruption("file is too short to be an sstable");
@@ -44,12 +44,12 @@ Status Table::Open(const Options& options, RandomAccessFile* file,
 
   char footer_space[Footer::kEncodedLength];
   Slice footer_input;
-  Status s = file->Read(size - Footer::kEncodedLength, Footer::kEncodedLength,
-                        &footer_input, footer_space);
+  // 根据传入的 sstable size，首先读取文件末尾的 footer
+  Status s = file->Read(size - Footer::kEncodedLength, Footer::kEncodedLength, &footer_input, footer_space);
   if (!s.ok()) return s;
 
   Footer footer;
-  s = footer.DecodeFrom(&footer_input);
+  s = footer.DecodeFrom(&footer_input); // 解析完 footer 就能获得 index_block 和 metaindex_block 的 BlockHandle
   if (!s.ok()) return s;
 
   // Read the index block
@@ -59,22 +59,21 @@ Status Table::Open(const Options& options, RandomAccessFile* file,
     if (options.paranoid_checks) {
       opt.verify_checksums = true;
     }
-    s = ReadBlock(file, opt, footer.index_handle(), &index_block_contents);
+    s = ReadBlock(file, opt, footer.index_handle(), &index_block_contents);     // 读取 index_block
   }
 
   if (s.ok()) {
-    // We've successfully read the footer and the index block: we're
-    // ready to serve requests.
+    // We've successfully read the footer and the index block: we're ready to serve requests.
     Block* index_block = new Block(index_block_contents);
     Rep* rep = new Table::Rep;
     rep->options = options;
     rep->file = file;
     rep->metaindex_handle = footer.metaindex_handle();
     rep->index_block = index_block;
-    rep->cache_id = (options.block_cache ? options.block_cache->NewId() : 0);
+    rep->cache_id = (options.block_cache ? options.block_cache->NewId() : 0);   // 分配 cacheID
     rep->filter_data = nullptr;
     rep->filter = nullptr;
-    *table = new Table(rep);
+    *table = new Table(rep);                                                    // 封装成 Table
     (*table)->ReadMeta(footer);
   }
 

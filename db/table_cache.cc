@@ -38,18 +38,15 @@ TableCache::TableCache(const std::string& dbname, const Options& options,
 
 TableCache::~TableCache() { delete cache_; }
 
-Status TableCache::FindTable(uint64_t file_number, uint64_t file_size,
-                             Cache::Handle** handle) {
+Status TableCache::FindTable(uint64_t file_number, uint64_t file_size, Cache::Handle** handle) {
   Status s;
-  char buf[sizeof(file_number)];
+  char buf[sizeof(file_number)];                            // 以 file_number 构造    table cache 中的key
   EncodeFixed64(buf, file_number);
   Slice key(buf, sizeof(buf));
-  // 根据key查找指定的文件。key为
-  *handle = cache_->Lookup(key);
+  *handle = cache_->Lookup(key);                            // 根据 key 查找指定的文件，若存在，则直接获得对应的Table
 
-  // 如果指定文件不存在，打开文件并添加至缓存
-  if (*handle == nullptr) {
-    std::string fname = TableFileName(dbname_, file_number);
+  if (*handle == nullptr) {                                 // 若不存在
+    std::string fname = TableFileName(dbname_, file_number);// 根据 FileNumber 构造出 sstable 的具体路径
     RandomAccessFile* file = nullptr;
     Table* table = nullptr;
     s = env_->NewRandomAccessFile(fname, &file);
@@ -60,8 +57,7 @@ Status TableCache::FindTable(uint64_t file_number, uint64_t file_size,
       }
     }
     if (s.ok()) {
-      // 将.sst文件映射到table，Table类用于解析.sst文件
-      s = Table::Open(options_, file, file_size, &table);
+      s = Table::Open(options_, file, file_size, &table);   // 得到具体的 Table（将.sst文件映射到table，Table类用于解析.sst文件）
     }
 
     if (!s.ok()) {
@@ -74,22 +70,22 @@ Status TableCache::FindTable(uint64_t file_number, uint64_t file_size,
       tf->file = file;
       tf->table = table;
 
-      // 将tf插入到LRUCache中，占据一个大小的缓存，DeleteEntry是删除结点的回调函数
-      *handle = cache_->Insert(key, tf, 1, &DeleteEntry);
+      *handle = cache_->Insert(key, tf, 1, &DeleteEntry);   // 插入TableCache，DeleteEntry是删除结点的回调函数
     }
   }
   return s;
 }
 
+// 处理 table cache 和实际 sstable IO 的逻辑由 TableCache::NewIterator（）控制
 Iterator* TableCache::NewIterator(const ReadOptions& options,
-                                  uint64_t file_number, uint64_t file_size,
-                                  Table** tableptr) {
+                                        uint64_t file_number, uint64_t file_size,
+                                        Table** tableptr) {
   if (tableptr != nullptr) {
     *tableptr = nullptr;
   }
 
   Cache::Handle* handle = nullptr;
-  Status s = FindTable(file_number, file_size, &handle);
+  Status s = FindTable(file_number, file_size, &handle);    // 构造 table cache 中的 key（FileNumber）,对 TableCache 做 Lookup
   if (!s.ok()) {
     return NewErrorIterator(s);
   }
