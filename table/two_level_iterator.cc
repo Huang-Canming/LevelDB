@@ -17,8 +17,7 @@ typedef Iterator* (*BlockFunction)(void*, const ReadOptions&, const Slice&);
 
 class TwoLevelIterator : public Iterator {
  public:
-  TwoLevelIterator(Iterator* index_iter, BlockFunction block_function,
-                   void* arg, const ReadOptions& options);
+  TwoLevelIterator(Iterator* index_iter, BlockFunction block_function, void* arg, const ReadOptions& options);
 
   ~TwoLevelIterator() override;
 
@@ -57,15 +56,15 @@ class TwoLevelIterator : public Iterator {
   void SetDataIterator(Iterator* data_iter);
   void InitDataBlock();
 
-  BlockFunction block_function_;
-  void* arg_;
-  const ReadOptions options_;
-  Status status_;
-  IteratorWrapper index_iter_;  //第一层迭代器，Index Block的block_data字段迭代器的代理
-  IteratorWrapper data_iter_;  // May be nullptr 第二层迭代器，Data Block的block_data字段迭代器的代理
+  BlockFunction block_function_;    // 根据 index_value(index_iter->Value(), data 对应的 index 信息)，可以返回对应 data Iterator 的 hook
+  void* arg_;                       // block_function_的参数
+  const ReadOptions options_;       // 传入的 option
+  Status status_;                   // 记录过程中的 status
+  IteratorWrapper index_iter_;      // index 的 Iterator,根据 key 可以 Seek()到 key 所在 data 的元信息
+  IteratorWrapper data_iter_;       // data 的 Iterator，根据 key 可以 Seek()到 key 在 data 中的位置，进而获得对应的 value
   // If data_iter_ is non-null, then "data_block_handle_" holds the
   // "index_value" passed to block_function_ to create the data_iter_.
-  std::string data_block_handle_;
+  std::string data_block_handle_;   // 保存 index_value(data 的 index 信息）
 };
 
 TwoLevelIterator::TwoLevelIterator(Iterator* index_iter,

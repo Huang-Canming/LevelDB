@@ -36,6 +36,10 @@ namespace {
 // combines multiple entries for the same userkey found in the DB
 // representation into a single entry while accounting for sequence
 // numbers, deletion markers, overwrites, etc.
+
+/* 存储层的 Iterator（iter_）不关心实际的数据，只需要做遍历；
+ * 而 DBIter 是提供给用户的最外层 Iterator，返回对应的 kv 数据，需要做逻辑上的解析；
+ * 比如，遍历到相同或者删除的 key 要跳过，如果指定了 Snapshot，要跳过不属于 Snapshot 的数据等。*/
 class DBIter : public Iterator {
  public:
   // Which direction is the iterator currently moving?
@@ -107,14 +111,18 @@ class DBIter : public Iterator {
   }
 
   DBImpl* db_;
-  const Comparator* const user_comparator_;
-  Iterator* const iter_;
-  SequenceNumber const sequence_;
-  Status status_;
-  std::string saved_key_;    // == current key when direction_==kReverse
-  std::string saved_value_;  // == current raw value when direction_==kReverse
-  Direction direction_;
-  bool valid_;
+  const Comparator* const user_comparator_; // 因为这是提供给使用者的 Iterator,需要对 user-key 进行比较验证，需要 user_comparator
+  Iterator* const iter_;                    // DBImpl::NewInternalIterator()获得的封装整个 db Iterator 的 MergingIterator
+  SequenceNumber const sequence_;           // 通过 SequnceNumber 的比较来控制遍历数据的时间点。
+                                            // 如果指定了 Snapshot，则赋值为 Snapshot::sequncenumber, 只遍历出 Snapshot 确定之前的数据;
+                                            // 否则赋值为 VersionSet::last_sequnce_number_,遍历出当前 db 中所有的数据
+  Status status_;                           // 遍历过程中的 status
+  std::string saved_key_;                   // 遍历时需要跳过相同和删除的 key，反向遍历为了处理这个逻辑，操作完成时，
+                                            // iter_定位到的会是当前 key 的前一个位置，所以需要保存过程中获得的当前 key/value。
+                                            // == current key when direction_==kReverse
+  std::string saved_value_;                 // == current raw value when direction_==kReverse
+  Direction direction_;                     // 前一次遍历的方向
+  bool valid_;                              // 标识是否遍历完成
   Random rnd_;
   size_t bytes_until_read_sampling_;
 };
@@ -174,23 +182,23 @@ void DBIter::Next() {
   FindNextUserEntry(true, &saved_key_);
 }
 
+/* 正向遍历，首次遇到的 key 就是 key 的最终状态（SequnceNumber 更大） */
 void DBIter::FindNextUserEntry(bool skipping, std::string* skip) {
   // Loop until we hit an acceptable entry to yield
   assert(iter_->Valid());
   assert(direction_ == kForward);
   do {
     ParsedInternalKey ikey;
-    if (ParseKey(&ikey) && ikey.sequence <= sequence_) {
+    if (ParseKey(&ikey) && ikey.sequence <= sequence_) {            // 解析 iter->Key()，判断是否可用
       switch (ikey.type) {
-        case kTypeDeletion:
+        case kTypeDeletion:                                         // 是 kTypeDeletion，说明该 key 已经删除,继续下去
           // Arrange to skip all upcoming entries for this key since
           // they are hidden by this deletion.
           SaveKey(ikey.user_key, skip);
           skipping = true;
           break;
-        case kTypeValue:
-          if (skipping &&
-              user_comparator_->Compare(ikey.user_key, *skip) <= 0) {
+        case kTypeValue:                                            // 是 kTypeValue，直接返回
+          if (skipping && user_comparator_->Compare(ikey.user_key, *skip) <= 0) {
             // Entry hidden
           } else {
             valid_ = true;
@@ -200,7 +208,7 @@ void DBIter::FindNextUserEntry(bool skipping, std::string* skip) {
           break;
       }
     }
-    iter_->Next();
+    iter_->Next();                                                  // 直到 Key()不同于遍历最开始的 key
   } while (iter_->Valid());
   saved_key_.clear();
   valid_ = false;
@@ -233,6 +241,9 @@ void DBIter::Prev() {
   FindPrevUserEntry();
 }
 
+/* 反向遍历时，对于一个 key，最后遍历到的才是其最终状态，
+ * 所以必须遍历到该 key 的前一个，才能确定该 key 已经全部处理过，并获得其最终状态。
+ * 这时 iter_并不位于当前 key 的位置，所以需要 saved_key_/save_value_来保存当前的 key/value。 */
 void DBIter::FindPrevUserEntry() {
   assert(direction_ == kReverse);
 
@@ -247,9 +258,9 @@ void DBIter::FindPrevUserEntry() {
           break;
         }
         value_type = ikey.type;
-        if (value_type == kTypeDeletion) {
+        if (value_type == kTypeDeletion) {                              // 是 kDeletion，说明该 key 已经删除
           saved_key_.clear();
-          ClearSavedValue();
+          ClearSavedValue();                                            // clear saved_key_/saved_value_，继续下去
         } else {
           Slice raw_value = iter_->value();
           if (saved_value_.capacity() > raw_value.size() + 1048576) {
@@ -260,7 +271,7 @@ void DBIter::FindPrevUserEntry() {
           saved_value_.assign(raw_value.data(), raw_value.size());
         }
       }
-      iter_->Prev();
+      iter_->Prev();                                                    // iter_->Prev()直到遍历到不同的 Key()
     } while (iter_->Valid());
   }
 
@@ -275,6 +286,10 @@ void DBIter::FindPrevUserEntry() {
   }
 }
 
+
+/* 定位到第一个大于等于 target 的 key。
+ * 所以，需要将内部每个迭代器都定位到各自的第一个大于等于 target 的 key，再找出其中最小的，
+ * 就是全局第一个大于等于 target 的 key。这个过程可能产生多次 I/O */
 void DBIter::Seek(const Slice& target) {
   direction_ = kForward;
   ClearSavedValue();

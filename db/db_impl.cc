@@ -1074,22 +1074,23 @@ static void CleanupIteratorState(void* arg1, void* arg2) {
 }  // anonymous namespace
 
 Iterator* DBImpl::NewInternalIterator(const ReadOptions& options,
-                                      SequenceNumber* latest_snapshot,
-                                      uint32_t* seed) {
+                                                SequenceNumber* latest_snapshot,
+                                                uint32_t* seed) {
   mutex_.Lock();
   *latest_snapshot = versions_->LastSequence();
 
   // Collect together all needed child iterators
   std::vector<Iterator*> list;
-  list.push_back(mem_->NewIterator());
+  list.push_back(mem_->NewIterator());                              // 获得 memtable 的 iterator
   mem_->Ref();
   if (imm_ != nullptr) {
-    list.push_back(imm_->NewIterator());
+    list.push_back(imm_->NewIterator());                            // 获得 immutable memtable 的 iterator
     imm_->Ref();
   }
-  versions_->current()->AddIterators(options, &list);
-  Iterator* internal_iter =
-      NewMergingIterator(&internal_comparator_, &list[0], list.size());
+  versions_->current()->AddIterators(options, &list);               // 获得所有 sstable 的 Iterator
+  Iterator* internal_iter = NewMergingIterator(&internal_comparator_, 
+                                               &list[0], 
+                                               list.size());        // 把获得的所有 Iterator 作为 children iterator 构造出 MergingIterator
   versions_->current()->Ref();
 
   IterState* cleanup = new IterState(&mutex_, mem_, imm_, versions_->current());
