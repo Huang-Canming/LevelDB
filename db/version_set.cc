@@ -902,7 +902,7 @@ Status VersionSet::Recover(bool* save_manifest) {
 
   // Read "CURRENT" file, which contains a pointer to the current manifest file
   std::string current;
-  Status s = ReadFileToString(env_, CurrentFileName(dbname_), &current);
+  Status s = ReadFileToString(env_, CurrentFileName(dbname_), &current);    // 从 CURRENT 文件中读取当前的 MANIFEST 文件
   if (!s.ok()) {
     return s;
   }
@@ -916,8 +916,7 @@ Status VersionSet::Recover(bool* save_manifest) {
   s = env_->NewSequentialFile(dscname, &file);
   if (!s.ok()) {
     if (s.IsNotFound()) {
-      return Status::Corruption("CURRENT points to a non-existent file",
-                                s.ToString());
+      return Status::Corruption("CURRENT points to a non-existent file", s.ToString());
     }
     return s;
   }
@@ -936,19 +935,18 @@ Status VersionSet::Recover(bool* save_manifest) {
     LogReporter reporter;
     reporter.status = &s;
     // 初始化一个Reader用来读取manifest中的日志记录
-    log::Reader reader(file, &reporter, true /*checksum*/,
+    log::Reader reader(file, &reporter, true /*checksum*/,          
                        0 /*initial_offset*/);
     Slice record;
     std::string scratch;
-    while (reader.ReadRecord(&record, &scratch) && s.ok()) {
+    while (reader.ReadRecord(&record, &scratch) && s.ok()) {        
       VersionEdit edit;
-      s = edit.DecodeFrom(record);
+      s = edit.DecodeFrom(record);                                  // 从 MANIFEST 文件中依次读取每个 record
       if (s.ok()) {
-        if (edit.has_comparator_ &&
-            edit.comparator_ != icmp_.user_comparator()->Name()) {
-          s = Status::InvalidArgument(
-              edit.comparator_ + " does not match existing comparator ",
-              icmp_.user_comparator()->Name());
+        if (edit.has_comparator_ && 
+            edit.comparator_ != icmp_.user_comparator()->Name()) {  // 检查 Comparator 是否一致
+          s = Status::InvalidArgument(edit.comparator_ + " does not match existing comparator ",
+                                      icmp_.user_comparator()->Name());
         }
       }
 
@@ -956,7 +954,7 @@ Status VersionSet::Recover(bool* save_manifest) {
         builder.Apply(&edit);
       }
 
-      if (edit.has_log_number_) {
+      if (edit.has_log_number_) {                                   // 检查解析 MANIFEST 的最终状态中的基本的信息是否完整
         log_number = edit.log_number_;
         have_log_number = true;
       }

@@ -304,24 +304,22 @@ Status DBImpl::Recover(VersionEdit* edit, bool* save_manifest) {
     return s;
   }
 
-  if (!env_->FileExists(CurrentFileName(dbname_))) {
+  if (!env_->FileExists(CurrentFileName(dbname_))) {            // 数据目录存在或不存在时的处理方式
     if (options_.create_if_missing) {
       s = NewDB();
       if (!s.ok()) {
         return s;
       }
     } else {
-      return Status::InvalidArgument(
-          dbname_, "does not exist (create_if_missing is false)");
+      return Status::InvalidArgument(dbname_, "does not exist (create_if_missing is false)");
     }
   } else {
     if (options_.error_if_exists) {
-      return Status::InvalidArgument(dbname_,
-                                     "exists (error_if_exists is true)");
+      return Status::InvalidArgument(dbname_, "exists (error_if_exists is true)");
     }
   }
 
-  s = versions_->Recover(save_manifest);
+  s = versions_->Recover(save_manifest);                        // db 元信息检查
   if (!s.ok()) {
     return s;
   }
@@ -355,16 +353,14 @@ Status DBImpl::Recover(VersionEdit* edit, bool* save_manifest) {
   }
   if (!expected.empty()) {
     char buf[50];
-    snprintf(buf, sizeof(buf), "%d missing files; e.g.",
-             static_cast<int>(expected.size()));
+    snprintf(buf, sizeof(buf), "%d missing files; e.g.", static_cast<int>(expected.size()));
     return Status::Corruption(buf, TableFileName(dbname_, *(expected.begin())));
   }
 
   // Recover in the order in which the logs were generated
   std::sort(logs.begin(), logs.end());
-  for (size_t i = 0; i < logs.size(); i++) {
-    s = RecoverLogFile(logs[i], (i == logs.size() - 1), save_manifest, edit,
-                       &max_sequence);
+  for (size_t i = 0; i < logs.size(); i++) {                    // 从 log 中恢复上一次可能丢失的数据
+    s = RecoverLogFile(logs[i], (i == logs.size() - 1), save_manifest, edit, &max_sequence);
     if (!s.ok()) {
       return s;
     }
@@ -401,7 +397,7 @@ Status DBImpl::RecoverLogFile(uint64_t log_number, bool last_log,
   mutex_.AssertHeld();
 
   // Open the log file
-  std::string fname = LogFileName(dbname_, log_number);
+  std::string fname = LogFileName(dbname_, log_number);         // 生成新的 log 文件
   SequentialFile* file;
   Status status = env_->NewSequentialFile(fname, &file);
   if (!status.ok()) {
@@ -420,8 +416,7 @@ Status DBImpl::RecoverLogFile(uint64_t log_number, bool last_log,
   // to be skipped instead of propagating bad information (like overly
   // large sequence numbers).
   log::Reader reader(file, &reporter, true /*checksum*/, 0 /*initial_offset*/);
-  Log(options_.info_log, "Recovering log #%llu",
-      (unsigned long long)log_number);
+  Log(options_.info_log, "Recovering log #%llu", (unsigned long long)log_number);
 
   // Read all the records and add to a memtable
   std::string scratch;
@@ -431,8 +426,7 @@ Status DBImpl::RecoverLogFile(uint64_t log_number, bool last_log,
   MemTable* mem = nullptr;
   while (reader.ReadRecord(&record, &scratch) && status.ok()) {
     if (record.size() < 12) {
-      reporter.Corruption(record.size(),
-                          Status::Corruption("log record too small"));
+      reporter.Corruption(record.size(), Status::Corruption("log record too small"));
       continue;
     }
     WriteBatchInternal::SetContents(&batch, record);
@@ -474,8 +468,7 @@ Status DBImpl::RecoverLogFile(uint64_t log_number, bool last_log,
     assert(log_ == nullptr);
     assert(mem_ == nullptr);
     uint64_t lfile_size;
-    if (env_->GetFileSize(fname, &lfile_size).ok() &&
-        env_->NewAppendableFile(fname, &logfile_).ok()) {
+    if (env_->GetFileSize(fname, &lfile_size).ok() && env_->NewAppendableFile(fname, &logfile_).ok()) {
       Log(options_.info_log, "Reusing old log %s \n", fname.c_str());
       log_ = new log::Writer(logfile_, lfile_size);
       logfile_number_ = log_number;
@@ -1534,7 +1527,7 @@ Status DB::Open(const Options& options, const std::string& dbname, DB** dbptr) {
   *dbptr = nullptr;
 
   DBImpl* impl = new DBImpl(options, dbname);
-  impl->mutex_.Lock();
+  impl->mutex_.Lock();                                      // 一份数据同时只能有一个 db 实例操作
   VersionEdit edit;
   // Recover handles create_if_missing, error_if_exists
   bool save_manifest = false;
@@ -1543,8 +1536,7 @@ Status DB::Open(const Options& options, const std::string& dbname, DB** dbptr) {
     // Create new log and a corresponding memtable.
     uint64_t new_log_number = impl->versions_->NewFileNumber();
     WritableFile* lfile;
-    s = options.env->NewWritableFile(LogFileName(dbname, new_log_number),
-                                     &lfile);
+    s = options.env->NewWritableFile(LogFileName(dbname, new_log_number), &lfile);
     if (s.ok()) {
       edit.SetLogNumber(new_log_number);
       impl->logfile_ = lfile;
@@ -1555,13 +1547,13 @@ Status DB::Open(const Options& options, const std::string& dbname, DB** dbptr) {
     }
   }
   if (s.ok() && save_manifest) {
-    edit.SetPrevLogNumber(0);  // No older logs needed after recovery.
+    edit.SetPrevLogNumber(0);                               // No older logs needed after recovery.
     edit.SetLogNumber(impl->logfile_number_);
-    s = impl->versions_->LogAndApply(&edit, &impl->mutex_);
+    s = impl->versions_->LogAndApply(&edit, &impl->mutex_); // 更新db的元信息，生成最新的MANIFEST文件
   }
   if (s.ok()) {
-    impl->DeleteObsoleteFiles();
-    impl->MaybeScheduleCompaction();
+    impl->DeleteObsoleteFiles();                            // 删除无用文件
+    impl->MaybeScheduleCompaction();                        // 尝试 compact
   }
   impl->mutex_.Unlock();
   if (s.ok()) {
