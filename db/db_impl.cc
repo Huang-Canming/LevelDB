@@ -304,7 +304,7 @@ Status DBImpl::Recover(VersionEdit* edit, bool* save_manifest) {
     return s;
   }
 
-  if (!env_->FileExists(CurrentFileName(dbname_))) {            // 数据目录存在或不存在时的处理方式
+  if (!env_->FileExists(CurrentFileName(dbname_))) {            // 数据目录存在或不存在时的处理方式，/root/testdb-new/CURRENT
     if (options_.create_if_missing) {
       s = NewDB();
       if (!s.ok()) {
@@ -397,7 +397,7 @@ Status DBImpl::RecoverLogFile(uint64_t log_number, bool last_log,
   mutex_.AssertHeld();
 
   // Open the log file
-  std::string fname = LogFileName(dbname_, log_number);         // 生成新的 log 文件
+  std::string fname = LogFileName(dbname_, log_number);         // 生成新的 log 文件，/root/testdb-new/000003.log
   SequentialFile* file;
   Status status = env_->NewSequentialFile(fname, &file);
   if (!status.ok()) {
@@ -501,7 +501,7 @@ Status DBImpl::WriteLevel0Table(MemTable* mem, VersionEdit* edit, Version* base)
   FileMetaData meta;
   meta.number = versions_->NewFileNumber();
   pending_outputs_.insert(meta.number);
-  Iterator* iter = mem->NewIterator();                      // 取得 memtable 的 Iterator
+  Iterator* iter = mem->NewIterator();                                  // 取得 memtable 的 Iterator
   Log(options_.info_log, "Level-0 table #%llu: started",
       (unsigned long long)meta.number);
 
@@ -525,7 +525,7 @@ Status DBImpl::WriteLevel0Table(MemTable* mem, VersionEdit* edit, Version* base)
     const Slice min_user_key = meta.smallest.user_key();
     const Slice max_user_key = meta.largest.user_key();
     if (base != nullptr) {
-      level = base->PickLevelForMemTableOutput(min_user_key, max_user_key); // 为生成的 sstable 选择合适的 level
+      level = base->PickLevelForMemTableOutput(min_user_key, max_user_key);         // 为生成的 sstable 选择合适的 level
     }
     edit->AddFile(level, meta.number, meta.file_size, meta.smallest, meta.largest); // 记录 VersionEdit
   }
@@ -1371,8 +1371,7 @@ Status DBImpl::MakeRoomForWrite(bool force) {
       // Yield previous error 如果后台任务已经出错,直接返回错误
       s = bg_error_;
       break;
-    } else if (allow_delay && versions_->NumLevelFiles(0) >=
-                                  config::kL0_SlowdownWritesTrigger) {
+    } else if (allow_delay && versions_->NumLevelFiles(0) >= config::kL0_SlowdownWritesTrigger) {
       // level0的文件数限制超过8,睡眠1ms,简单等待后台任务执行。写入writer线程向压缩线程转让cpu。
       // We are getting close to hitting a hard limit on the number of
       // L0 files.  Rather than delaying a single write by several
@@ -1384,10 +1383,8 @@ Status DBImpl::MakeRoomForWrite(bool force) {
       env_->SleepForMicroseconds(1000);
       allow_delay = false;  // Do not delay a single write more than once
       mutex_.Lock();
-    } else if (!force &&
-               (mem_->ApproximateMemoryUsage() <= options_.write_buffer_size)) {
-      // There is room in current memtable
-      // 当前memtable，还有空间继续写入
+    } else if (!force && (mem_->ApproximateMemoryUsage() <= options_.write_buffer_size)) {
+      // 当前memtable，还有空间继续写入，There is room in current memtable
       break;
     } else if (imm_ != nullptr) {
       // We have filled up the current memtable, but the previous
@@ -1405,23 +1402,23 @@ Status DBImpl::MakeRoomForWrite(bool force) {
       assert(versions_->PrevLogNumber() == 0);
       uint64_t new_log_number = versions_->NewFileNumber();
       WritableFile* lfile = nullptr;
-      s = env_->NewWritableFile(LogFileName(dbname_, new_log_number), &lfile); //生成新的log文件
+      s = env_->NewWritableFile(LogFileName(dbname_, new_log_number), &lfile);      //生成新的log文件
       if (!s.ok()) {
         // Avoid chewing through file number space in a tight loop.
         versions_->ReuseFileNumber(new_log_number);
         break;
       }
-      delete log_; //删除旧的log对象分配新的
+      delete log_;                                      //删除旧的log对象分配新的
       delete logfile_;
       logfile_ = lfile;
       logfile_number_ = new_log_number;
       log_ = new log::Writer(lfile);
-      imm_ = mem_; //切换memtable到Imuable memtable
+      imm_ = mem_;                                      //切换memtable到Imuable memtable
       has_imm_.store(true, std::memory_order_release);
       mem_ = new MemTable(internal_comparator_);
       mem_->Ref();
-      force = false;  // Do not force another compaction if have room
-      MaybeScheduleCompaction(); //如果需要进行compaction,后台执行
+      force = false;                                    // Do not force another compaction if have room
+      MaybeScheduleCompaction();                        //如果需要进行compaction,后台执行
     }
   }
   return s;

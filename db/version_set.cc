@@ -902,7 +902,7 @@ Status VersionSet::Recover(bool* save_manifest) {
 
   // Read "CURRENT" file, which contains a pointer to the current manifest file
   std::string current;
-  Status s = ReadFileToString(env_, CurrentFileName(dbname_), &current);    // 从 CURRENT 文件中读取当前的 MANIFEST 文件
+  Status s = ReadFileToString(env_, CurrentFileName(dbname_), &current);    // 从 CURRENT 文件中读取当前的 MANIFEST 文件，/root/testdb-new/CURRENT
   if (!s.ok()) {
     return s;
   }
@@ -911,7 +911,7 @@ Status VersionSet::Recover(bool* save_manifest) {
   }
   current.resize(current.size() - 1);
 
-  std::string dscname = dbname_ + "/" + current;
+  std::string dscname = dbname_ + "/" + current;                            // /root/testdb-new/MANIFEST-000001
   SequentialFile* file;
   s = env_->NewSequentialFile(dscname, &file);
   if (!s.ok()) {
