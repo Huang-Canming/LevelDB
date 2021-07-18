@@ -1,1 +1,4 @@
-g++ -g useDB.cpp -l leveldb -l pthread
+
+
+编译 demo：
+g++ -o demo -g useDB.cpp -l leveldb -l pthread
