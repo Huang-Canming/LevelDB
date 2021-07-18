@@ -3,4 +3,5 @@ mkdir -p build && cd build
 cmake -DCMAKE_BUILD_TYPE=Debug .. && cmake --build .
 
 编译 demo：
+cp ./libleveldb.a /usr/local/lib/
 g++ -o demo -g useDB.cpp -l leveldb -l pthread
