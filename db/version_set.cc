@@ -85,8 +85,7 @@ Version::~Version() {
   }
 }
 
-int FindFile(const InternalKeyComparator& icmp,
-             const std::vector<FileMetaData*>& files, const Slice& key) {
+int FindFile(const InternalKeyComparator& icmp, const std::vector<FileMetaData*>& files, const Slice& key) {
   uint32_t left = 0;
   uint32_t right = files.size();
   while (left < right) {
@@ -105,18 +104,14 @@ int FindFile(const InternalKeyComparator& icmp,
   return right;
 }
 
-static bool AfterFile(const Comparator* ucmp, const Slice* user_key,
-                      const FileMetaData* f) {
+static bool AfterFile(const Comparator* ucmp, const Slice* user_key, const FileMetaData* f) {
   // null user_key occurs before all keys and is therefore never after *f
-  return (user_key != nullptr &&
-          ucmp->Compare(*user_key, f->largest.user_key()) > 0);
+  return (user_key != nullptr && ucmp->Compare(*user_key, f->largest.user_key()) > 0);
 }
 
-static bool BeforeFile(const Comparator* ucmp, const Slice* user_key,
-                       const FileMetaData* f) {
+static bool BeforeFile(const Comparator* ucmp, const Slice* user_key, const FileMetaData* f) {
   // null user_key occurs after all keys and is therefore never before *f
-  return (user_key != nullptr &&
-          ucmp->Compare(*user_key, f->smallest.user_key()) < 0);
+  return (user_key != nullptr && ucmp->Compare(*user_key, f->smallest.user_key()) < 0);
 }
 
 bool SomeFileOverlapsRange(const InternalKeyComparator& icmp,
@@ -322,8 +317,7 @@ void Version::ForEachOverlapping(Slice user_key, Slice internal_key, void* arg,
   }
 }
 
-Status Version::Get(const ReadOptions& options, const LookupKey& k,
-                    std::string* value, GetStats* stats) {
+Status Version::Get(const ReadOptions& options, const LookupKey& k, std::string* value, GetStats* stats) {
   Slice ikey = k.internal_key();
   Slice user_key = k.user_key();
   const Comparator* ucmp = vset_->icmp_.user_comparator();
@@ -339,7 +333,7 @@ Status Version::Get(const ReadOptions& options, const LookupKey& k,
   // in a smaller level, later levels are irrelevant.
   std::vector<FileMetaData*> tmp;
   FileMetaData* tmp2;
-  for (int level = 0; level < config::kNumLevels; level++) {
+  for (int level = 0; level < config::kNumLevels; level++) {// 从 level-0 开始，每个 level 上依次进行查找
     size_t num_files = files_[level].size();
     if (num_files == 0) continue;
 
@@ -349,26 +343,31 @@ Status Version::Get(const ReadOptions& options, const LookupKey& k,
       // Level-0 files may overlap each other.  Find all files that
       // overlap user_key and process them in order from newest to oldest.
       tmp.reserve(num_files);
-      for (uint32_t i = 0; i < num_files; i++) {
+      for (uint32_t i = 0; i < num_files; i++) {            // level-0 的查找只能顺序遍历 files_[0]
         FileMetaData* f = files[i];
         if (ucmp->Compare(user_key, f->smallest.user_key()) >= 0 &&
             ucmp->Compare(user_key, f->largest.user_key()) <= 0) {
-          tmp.push_back(f);
+          tmp.push_back(f);                                 // 找出 level-0 上可能包含 key 的 sstable（可能有多个）
         }
       }
       if (tmp.empty()) continue;
 
+      /* 考虑到 level-0 中的 sstable 是 memtale dump 生成的，
+       * 所以新生成的 sstable 一定比旧生成有更新的数据，
+       * 同时 sstable 文件的 FileNumber 是递增的，
+       * 所以将从 level-0 中获得的 sstable(FileMetaData) 按 FileNumber 排序，
+       * 能够优化 level-0 中的查找 */
       std::sort(tmp.begin(), tmp.end(), NewestFirst);
       files = &tmp[0];
       num_files = tmp.size();
-    } else {
+    } else {                           // 非 level-0
       // Binary search to find earliest index whose largest key >= ikey.
-      uint32_t index = FindFile(vset_->icmp_, files_[level], ikey);
+      uint32_t index = FindFile(vset_->icmp_, files_[level], ikey); // 对 files_[] 基于 FileMetaData::largest 做二分查找
       if (index >= num_files) {
         files = nullptr;
         num_files = 0;
       } else {
-        tmp2 = files[index];
+        tmp2 = files[index];                                // 非 level-0 上最多找到一个 sstable
         if (ucmp->Compare(user_key, tmp2->smallest.user_key()) < 0) {
           // All of "tmp2" is past any data for user_key
           files = nullptr;
@@ -380,9 +379,9 @@ Status Version::Get(const ReadOptions& options, const LookupKey& k,
       }
     }
 
-    for (uint32_t i = 0; i < num_files; ++i) {
+    for (uint32_t i = 0; i < num_files; ++i) {              // 如果该 level 上没有找到可能的 sstable，跳过
       if (last_file_read != nullptr && stats->seek_file == nullptr) {
-        // We have had more than one seek for this read.  Charge the 1st file.
+        // We have had more than one seek for this read. Charge the 1st file.
         stats->seek_file = last_file_read;
         stats->seek_file_level = last_file_read_level;
       }
@@ -396,18 +395,17 @@ Status Version::Get(const ReadOptions& options, const LookupKey& k,
       saver.ucmp = ucmp;
       saver.user_key = user_key;
       saver.value = value;
-      s = vset_->table_cache_->Get(options, f->number, f->file_size, ikey,
-                                   &saver, SaveValue);
+      s = vset_->table_cache_->Get(options, f->number, f->file_size, ikey, &saver, SaveValue);  // seek
       if (!s.ok()) {
         return s;
       }
-      switch (saver.state) {
+      switch (saver.state) {                                // sseek 成功，根据 ValueType 判断是否是有效的数据
         case kNotFound:
-          break;  // Keep searching in other files
-        case kFound:
+          break;                                            // Keep searching in other files
+        case kFound:                                        // 返回 data not exist
           return s;
         case kDeleted:
-          s = Status::NotFound(Slice());  // Use empty error message for speed
+          s = Status::NotFound(Slice());                    // 返回 data not exist，Use empty error message for speed
           return s;
         case kCorrupt:
           s = Status::Corruption("corrupted key for ", user_key);

@@ -101,8 +101,7 @@ Iterator* TableCache::NewIterator(const ReadOptions& options,
 
 Status TableCache::Get(const ReadOptions& options, uint64_t file_number,
                        uint64_t file_size, const Slice& k, void* arg,
-                       void (*handle_result)(void*, const Slice&,
-                                             const Slice&)) {
+                       void (*handle_result)(void*, const Slice&, const Slice&)) {
   Cache::Handle* handle = nullptr;
   Status s = FindTable(file_number, file_size, &handle);
   if (s.ok()) {
