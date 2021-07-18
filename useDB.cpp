@@ -3,7 +3,7 @@
 #include <iostream>
 #include <string>
 #include <sstream>
-#include "./LevelDB/include/leveldb/db.h"   // 注意文件放的位置，应该要和leveldb的大文件夹放在同一级
+#include "./include/leveldb/db.h"   // 注意文件放的位置，应该要和leveldb的大文件夹放在同一级
 
 using namespace std;
 using namespace leveldb;
@@ -21,7 +21,7 @@ int main() {
     // 配置项：如果LevelDB数据库目录不存在，则自动创建
     options.create_if_missing = true;
 
-    status = leveldb::DB::Open(options, "/root/testdb", &db);
+    status = leveldb::DB::Open(options, "/root/testdb-new", &db);
     assert(status.ok());
 
 	while (iKey < 100000) {

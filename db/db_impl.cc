@@ -1524,6 +1524,7 @@ Status DB::Delete(const WriteOptions& opt, const Slice& key) {
 DB::~DB() = default;
 
 Status DB::Open(const Options& options, const std::string& dbname, DB** dbptr) {
+  printf("Now in DB::Open\n");
   *dbptr = nullptr;
 
   DBImpl* impl = new DBImpl(options, dbname);
