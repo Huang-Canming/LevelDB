@@ -1,4 +1,6 @@
-
+编译 leveldb，在源码所在目录下执行：
+mkdir -p build && cd build
+cmake -DCMAKE_BUILD_TYPE=Debug .. && cmake --build .
 
 编译 demo：
 g++ -o demo -g useDB.cpp -l leveldb -l pthread
